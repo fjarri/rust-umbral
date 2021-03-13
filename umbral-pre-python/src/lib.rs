@@ -1,6 +1,11 @@
+use pyo3::class::basic::CompareOp;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
+use pyo3::PyObjectProtocol;
+
+use umbral_pre::SerializableToArray;
 
 #[pyclass(module = "umbral")]
 pub struct SecretKey {
@@ -33,6 +38,7 @@ impl PublicKey {
 }
 
 #[pyclass(module = "umbral")]
+#[derive(PartialEq)]
 pub struct Parameters {
     backend: umbral_pre::Parameters,
 }
@@ -43,6 +49,30 @@ impl Parameters {
     pub fn new() -> Self {
         Self {
             backend: umbral_pre::Parameters::new(),
+        }
+    }
+
+    pub fn __bytes__(&self, py: Python) -> PyObject {
+        let serialized = self.backend.to_array();
+        PyBytes::new(py, serialized.as_slice()).into()
+    }
+
+    #[staticmethod]
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let backend_params = umbral_pre::Parameters::from_bytes(bytes)?;
+        Some(Self {
+            backend: backend_params,
+        })
+    }
+}
+
+#[pyproto]
+impl PyObjectProtocol for Parameters {
+    fn __richcmp__(&self, other: PyRef<Parameters>, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Eq => Ok(self == &*other),
+            CompareOp::Ne => Ok(self != &*other),
+            _ => Err(PyTypeError::new_err("Parameter objects are not ordered")),
         }
     }
 }
