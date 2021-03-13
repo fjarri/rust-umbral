@@ -24,7 +24,6 @@ pub fn unsafe_hash_to_point(dst: &[u8], data: &[u8]) -> Option<CurvePoint> {
     // and it is always the same.
     let sign_prefix = GenericArray::<u8, U1>::from_slice(&[2u8]);
 
-    let dst_len = (dst.len() as u32).to_be_bytes();
     let data_len = (data.len() as u32).to_be_bytes();
 
     // We use an internal 32-bit counter as additional input
@@ -32,13 +31,11 @@ pub fn unsafe_hash_to_point(dst: &[u8], data: &[u8]) -> Option<CurvePoint> {
     while i < <u32>::MAX {
         let ibytes = (i as u32).to_be_bytes();
 
-        let mut digest = Sha256::new();
-        digest.update(&dst_len);
-        digest.update(dst);
-        digest.update(&data_len);
-        digest.update(data);
-        digest.update(&ibytes);
-        let result = digest.finalize();
+        let result = BytesDigest::new_with_dst(dst)
+            .chain_bytes(&data_len)
+            .chain_bytes(data)
+            .chain_bytes(&ibytes)
+            .finalize();
 
         // Set the sign byte
         let maybe_point_bytes = sign_prefix.concat(result);
