@@ -41,3 +41,10 @@ pub(crate) fn hash_metadata(bytes: &[u8]) -> GenericArray<u8, BytesDigestOutputS
         .chain_bytes(bytes)
         .finalize()
 }
+
+pub(crate) fn hash_capsule_points(capsule_e: &CurvePoint, capsule_v: &CurvePoint) -> CurveScalar {
+    ScalarDigest::new_with_dst(b"CAPSULE_POINTS")
+        .chain_point(capsule_e)
+        .chain_point(capsule_v)
+        .finalize()
+}
