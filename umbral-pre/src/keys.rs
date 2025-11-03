@@ -32,9 +32,7 @@ use crate::secret_box::SecretBox;
 use crate::traits::{fmt_public, fmt_secret, SizeMismatchError};
 
 #[cfg(feature = "serde")]
-use crate::serde_bytes::{
-    deserialize_with_encoding, serialize_with_encoding, Encoding, TryFromBytes,
-};
+use serde_encoded_bytes::{Hex, SliceLike};
 
 /// ECDSA signature object.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -100,7 +98,7 @@ impl Serialize for Signature {
     where
         S: Serializer,
     {
-        serialize_with_encoding(&self.to_be_bytes(), serializer, Encoding::Hex)
+        SliceLike::<Hex>::serialize(&self.to_be_bytes(), serializer)
     }
 }
 
@@ -110,15 +108,15 @@ impl<'de> Deserialize<'de> for Signature {
     where
         D: Deserializer<'de>,
     {
-        deserialize_with_encoding(deserializer, Encoding::Hex)
+        SliceLike::<Hex>::deserialize(deserializer)
     }
 }
 
 #[cfg(feature = "serde")]
-impl TryFromBytes for Signature {
+impl<'a> TryFrom<&'a [u8]> for Signature {
     type Error = String;
 
-    fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         Self::try_from_be_bytes(bytes)
     }
 }
@@ -188,7 +186,7 @@ impl Serialize for RecoverableSignature {
     where
         S: Serializer,
     {
-        serialize_with_encoding(&self.to_be_bytes(), serializer, Encoding::Hex)
+        SliceLike::<Hex>::serialize(&self.to_be_bytes(), serializer)
     }
 }
 
@@ -198,15 +196,15 @@ impl<'de> Deserialize<'de> for RecoverableSignature {
     where
         D: Deserializer<'de>,
     {
-        deserialize_with_encoding(deserializer, Encoding::Hex)
+        SliceLike::<Hex>::deserialize(deserializer)
     }
 }
 
 #[cfg(feature = "serde")]
-impl TryFromBytes for RecoverableSignature {
+impl<'a> TryFrom<&'a [u8]> for RecoverableSignature {
     type Error = String;
 
-    fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         Self::try_from_be_bytes(bytes)
     }
 }
@@ -381,7 +379,7 @@ impl Serialize for PublicKey {
     where
         S: Serializer,
     {
-        serialize_with_encoding(&self.to_compressed_bytes(), serializer, Encoding::Hex)
+        SliceLike::<Hex>::serialize(&self.to_compressed_bytes(), serializer)
     }
 }
 
@@ -391,15 +389,15 @@ impl<'de> Deserialize<'de> for PublicKey {
     where
         D: Deserializer<'de>,
     {
-        deserialize_with_encoding(deserializer, Encoding::Hex)
+        SliceLike::<Hex>::deserialize(deserializer)
     }
 }
 
 #[cfg(feature = "serde")]
-impl TryFromBytes for PublicKey {
+impl<'a> TryFrom<&'a [u8]> for PublicKey {
     type Error = String;
 
-    fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         Self::try_from_compressed_bytes(bytes)
     }
 }
@@ -505,7 +503,8 @@ mod tests {
     };
 
     #[cfg(feature = "serde")]
-    use crate::serde_bytes::tests::check_serialization_roundtrip;
+    use crate::serde_test::check_serialization_roundtrip;
+
     #[cfg(feature = "serde")]
     use ::{rand_chacha::ChaCha12Rng, rand_core::SeedableRng};
 

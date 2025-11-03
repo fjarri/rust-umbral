@@ -1,6 +1,3 @@
-#[cfg(feature = "serde")]
-use alloc::string::String;
-
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
@@ -9,7 +6,10 @@ use generic_array::{typenum::U32, GenericArray};
 use rand_core::{CryptoRng, RngCore};
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "serde")]
+use serde_encoded_bytes::{GenericArray014, Hex};
 
 use crate::curve::{CurvePoint, CurveScalar, NonZeroCurveScalar};
 use crate::hashing_ds::{hash_to_polynomial_arg, hash_to_shared_secret, kfrag_signature_message};
@@ -21,17 +21,16 @@ use crate::traits::fmt_public;
 #[cfg(feature = "default-serialization")]
 use crate::{DefaultDeserialize, DefaultSerialize};
 
-#[cfg(feature = "serde")]
-use crate::serde_bytes::{
-    deserialize_with_encoding, serialize_with_encoding, Encoding, TryFromBytes,
-};
-
 #[allow(clippy::upper_case_acronyms)]
 type KeyFragIDSize = U32;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct KeyFragID(GenericArray<u8, KeyFragIDSize>);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub(crate) struct KeyFragID(
+    #[cfg_attr(feature = "serde", serde(with = "GenericArray014::<Hex>"))]
+    GenericArray<u8, KeyFragIDSize>,
+);
 
 impl KeyFragID {
     fn random(rng: &mut impl RngCore) -> Self {
@@ -44,37 +43,6 @@ impl KeyFragID {
 impl AsRef<[u8]> for KeyFragID {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
-    }
-}
-
-#[cfg(feature = "serde")]
-impl Serialize for KeyFragID {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serialize_with_encoding(&self.0, serializer, Encoding::Hex)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for KeyFragID {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserialize_with_encoding(deserializer, Encoding::Hex)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl TryFromBytes for KeyFragID {
-    type Error = String;
-
-    fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
-        let arr = GenericArray::<u8, KeyFragIDSize>::from_exact_iter(bytes.iter().cloned())
-            .ok_or("Invalid length of a key frag ID")?;
-        Ok(Self(arr))
     }
 }
 
@@ -421,7 +389,7 @@ mod tests {
     use crate::{PublicKey, SecretKey, Signer};
 
     #[cfg(feature = "serde")]
-    use crate::serde_bytes::tests::check_serialization_roundtrip;
+    use crate::serde_test::check_serialization_roundtrip;
 
     #[cfg(feature = "serde")]
     use ::{rand_chacha::ChaCha12Rng, rand_core::SeedableRng};

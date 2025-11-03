@@ -140,8 +140,8 @@ mod pre;
 mod secret_box;
 mod traits;
 
-#[cfg(feature = "serde")]
-pub mod serde_bytes;
+#[cfg(all(test, feature = "serde"))]
+pub(crate) mod serde_test;
 
 pub use capsule::{Capsule, OpenReencryptedError};
 pub use capsule_frag::{CapsuleFrag, CapsuleFragVerificationError, VerifiedCapsuleFrag};

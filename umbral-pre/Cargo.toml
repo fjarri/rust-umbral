@@ -24,6 +24,7 @@ js-sys = { version = "0.3.63", optional = true }
 wasm-bindgen = { version = "0.2.86", optional = true }
 derive_more = { version = "0.99", optional = true, default-features = false, features = ["as_ref", "from", "into"] }
 wasm-bindgen-derive = { version = "0.2.0", optional = true }
+serde-encoded-bytes = { version = "0.2", optional = true, features = ["hex", "generic-array-014"] }
 
 # These packages are among the dependencies of the packages above.
 # Their versions should be updated when the main packages above are updated.
@@ -46,7 +47,7 @@ bindings-python = ["pyo3", "std", "derive_more", "default-serialization"]
 bindings-wasm = ["js-sys", "default-serialization", "wasm-bindgen", "derive_more", "wasm-bindgen-derive", "getrandom/js"]
 default-rng = ["getrandom", "rand_core/getrandom"]
 default-serialization = ["serde", "rmp-serde"]
-serde = ["dep:serde"]
+serde = ["dep:serde", "serde-encoded-bytes"]
 std = []
 
 # What features to use when building documentation on docs.rs

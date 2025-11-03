@@ -5,6 +5,9 @@ use sha2::digest::Digest;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "serde")]
+use serde_encoded_bytes::{GenericArray014, Hex};
+
 use crate::curve::CurvePoint;
 use crate::hashing::BackendDigestOutput;
 use crate::hashing_ds::{hash_to_cfrag_verification, kfrag_signature_message};
@@ -81,7 +84,7 @@ pub struct ReencryptionEvidence {
     pub u2: CurvePoint,
     /// The hashed message used to create `kfrag_signature` in
     /// [`CapsuleFrag::to_bytes_simple`].
-    #[cfg_attr(feature = "serde", serde(with = "crate::serde_bytes::as_hex"))]
+    #[cfg_attr(feature = "serde", serde(with = "GenericArray014::<Hex>"))]
     pub kfrag_validity_message_hash: BackendDigestOutput,
     /// The recovery byte corresponding to `kfrag_signature` in [`CapsuleFrag::to_bytes_simple`]
     /// (`true` corresponds to `0x01` and `false` to `0x00`).

@@ -34,9 +34,7 @@ use k256::elliptic_curve::group::ff::PrimeField;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "serde")]
-use crate::serde_bytes::{
-    deserialize_with_encoding, serialize_with_encoding, Encoding, TryFromBytes,
-};
+use serde_encoded_bytes::{Hex, SliceLike};
 
 pub(crate) type CurveType = Secp256k1;
 pub(crate) type CompressedPointSize =
@@ -89,7 +87,7 @@ impl Serialize for CurveScalar {
     where
         S: Serializer,
     {
-        serialize_with_encoding(&self.0.to_bytes(), serializer, Encoding::Hex)
+        SliceLike::<Hex>::serialize(&self.0.to_bytes(), serializer)
     }
 }
 
@@ -99,15 +97,15 @@ impl<'de> Deserialize<'de> for CurveScalar {
     where
         D: Deserializer<'de>,
     {
-        deserialize_with_encoding(deserializer, Encoding::Hex)
+        SliceLike::<Hex>::deserialize(deserializer)
     }
 }
 
 #[cfg(feature = "serde")]
-impl TryFromBytes for CurveScalar {
+impl<'a> TryFrom<&'a [u8]> for CurveScalar {
     type Error = String;
 
-    fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         Self::try_from_bytes(bytes)
     }
 }
@@ -238,7 +236,7 @@ impl Serialize for CurvePoint {
     where
         S: Serializer,
     {
-        serialize_with_encoding(&self.to_compressed_array(), serializer, Encoding::Hex)
+        SliceLike::<Hex>::serialize(&self.to_compressed_array(), serializer)
     }
 }
 
@@ -248,15 +246,15 @@ impl<'de> Deserialize<'de> for CurvePoint {
     where
         D: Deserializer<'de>,
     {
-        deserialize_with_encoding(deserializer, Encoding::Hex)
+        SliceLike::<Hex>::deserialize(deserializer)
     }
 }
 
 #[cfg(feature = "serde")]
-impl TryFromBytes for CurvePoint {
+impl<'a> TryFrom<&'a [u8]> for CurvePoint {
     type Error = String;
 
-    fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
         Self::try_from_compressed_bytes(bytes)
     }
 }

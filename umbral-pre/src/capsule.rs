@@ -268,7 +268,7 @@ mod tests {
     use crate::{generate_kfrags, reencrypt, SecretKey, Signer};
 
     #[cfg(feature = "serde")]
-    use crate::serde_bytes::tests::check_serialization_roundtrip;
+    use crate::serde_test::check_serialization_roundtrip;
 
     #[cfg(feature = "serde")]
     use ::{rand_chacha::ChaCha12Rng, rand_core::SeedableRng};
