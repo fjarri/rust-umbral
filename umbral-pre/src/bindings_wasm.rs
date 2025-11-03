@@ -18,7 +18,7 @@ use js_sys::{Error, Uint8Array};
 use secrecy::ExposeSecret;
 use wasm_bindgen::prelude::{wasm_bindgen, JsValue};
 use wasm_bindgen::JsCast;
-use wasm_bindgen_derive::TryFromJsValue;
+use wasm_bindgen_derive::{try_from_js_array, try_from_js_option, TryFromJsValue};
 
 use crate as umbral_pre;
 use crate::{DefaultDeserialize, DefaultSerialize};
@@ -43,45 +43,6 @@ extern "C" {
 
 fn map_js_err<T: fmt::Display>(err: T) -> Error {
     Error::new(&format!("{err}"))
-}
-
-/// Tries to convert an optional value (either `null` or a `#[wasm_bindgen]` marked structure)
-/// from `JsValue` to the Rust type.
-// TODO (#25): This is necessary since wasm-bindgen does not support
-// having a parameter of `Option<&T>`, and using `Option<T>` consumes the argument
-// (see https://github.com/rustwasm/wasm-bindgen/issues/2370).
-fn try_from_js_option<'a, T>(value: &'a JsValue) -> Result<Option<T>, Error>
-where
-    T: TryFrom<&'a JsValue>,
-    <T as TryFrom<&'a JsValue>>::Error: fmt::Display,
-{
-    let typed_value = if value.is_null() {
-        None
-    } else {
-        Some(T::try_from(value).map_err(map_js_err)?)
-    };
-    Ok(typed_value)
-}
-
-/// Tries to convert a JS array from `JsValue` to a vector of Rust type elements.
-// TODO (#23): This is necessary since wasm-bindgen does not support
-// having a parameter of `Vec<&T>`
-// (see https://github.com/rustwasm/wasm-bindgen/issues/111).
-fn try_from_js_array<T>(value: &JsValue) -> Result<Vec<T>, Error>
-where
-    for<'a> T: TryFrom<&'a JsValue>,
-    for<'a> <T as TryFrom<&'a JsValue>>::Error: fmt::Display,
-{
-    let array: &js_sys::Array = value
-        .dyn_ref()
-        .ok_or_else(|| Error::new("Got a non-array argument where an array was expected"))?;
-    let length: usize = array.length().try_into().map_err(map_js_err)?;
-    let mut result = Vec::<T>::with_capacity(length);
-    for js in array.iter() {
-        let typed_elem = T::try_from(&js).map_err(map_js_err)?;
-        result.push(typed_elem);
-    }
-    Ok(result)
 }
 
 #[wasm_bindgen]
@@ -473,7 +434,7 @@ pub fn decrypt_reencrypted(
     // TODO (#23): using a custom type since `wasm_bindgen` currently does not support
     // Vec<CustomStruct> as a parameter.
     // Will probably be fixed along with https://github.com/rustwasm/wasm-bindgen/issues/111
-    let typed_vcfrags = try_from_js_array::<VerifiedCapsuleFrag>(vcfrags.as_ref())?;
+    let typed_vcfrags = try_from_js_array::<VerifiedCapsuleFrag>(vcfrags).map_err(map_js_err)?;
     let backend_vcfrags = typed_vcfrags.into_iter().map(|vcfrag| vcfrag.0);
     umbral_pre::decrypt_reencrypted(
         &receiving_sk.0,
@@ -499,8 +460,10 @@ impl KeyFrag {
         delegating_pk: &OptionPublicKey,
         receiving_pk: &OptionPublicKey,
     ) -> Result<VerifiedKeyFrag, Error> {
-        let typed_delegating_pk = try_from_js_option::<PublicKey>(delegating_pk.as_ref())?;
-        let typed_receiving_pk = try_from_js_option::<PublicKey>(receiving_pk.as_ref())?;
+        let typed_delegating_pk =
+            try_from_js_option::<PublicKey>(delegating_pk).map_err(map_js_err)?;
+        let typed_receiving_pk =
+            try_from_js_option::<PublicKey>(receiving_pk).map_err(map_js_err)?;
 
         self.0
             .verify(
