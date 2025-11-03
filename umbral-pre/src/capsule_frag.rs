@@ -142,7 +142,7 @@ impl CapsuleFrag {
     /// - `u2`, the kfrag PoK (compressed curve point, 33 bytes),
     /// - `signature` (big-endian scalar, 32 bytes),
     /// - `kfrag_signature` (ECDSA signature serialized as `r` and `s`,
-    ///    each a 32 byte big-endian scalar).
+    ///   each a 32 byte big-endian scalar).
     pub fn to_bytes_simple(&self) -> Box<[u8]> {
         let e1 = self.point_e1.to_compressed_array();
         let v1 = self.point_v1.to_compressed_array();

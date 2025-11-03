@@ -52,7 +52,7 @@ fn map_js_err<T: fmt::Display>(err: T) -> Error {
 fn try_from_js_option<'a, T>(value: &'a JsValue) -> Result<Option<T>, Error>
 where
     T: TryFrom<&'a JsValue>,
-    <T as TryFrom<&'a JsValue>>::Error: core::fmt::Display,
+    <T as TryFrom<&'a JsValue>>::Error: fmt::Display,
 {
     let typed_value = if value.is_null() {
         None
@@ -69,7 +69,7 @@ where
 fn try_from_js_array<T>(value: &JsValue) -> Result<Vec<T>, Error>
 where
     for<'a> T: TryFrom<&'a JsValue>,
-    for<'a> <T as TryFrom<&'a JsValue>>::Error: core::fmt::Display,
+    for<'a> <T as TryFrom<&'a JsValue>>::Error: fmt::Display,
 {
     let array: &js_sys::Array = value
         .dyn_ref()

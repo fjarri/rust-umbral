@@ -4,3 +4,4 @@ members = [
     "umbral-pre-wasm",
     "umbral-pre-python",
 ]
+resolver = "2"

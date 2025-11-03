@@ -189,7 +189,7 @@ impl PublicKey {
     }
 
     fn __hash__(&self) -> i64 {
-        hash(&self.backend.to_compressed_bytes())
+        hash(self.backend.to_compressed_bytes())
     }
 
     fn __str__(&self) -> PyResult<String> {
@@ -264,7 +264,7 @@ impl Signature {
     }
 
     fn __hash__(&self) -> i64 {
-        hash(&self.backend.to_der_bytes())
+        hash(self.backend.to_der_bytes())
     }
 
     fn __str__(&self) -> PyResult<String> {
@@ -297,7 +297,7 @@ impl RecoverableSignature {
     }
 
     fn __hash__(&self) -> i64 {
-        hash(&self.backend.to_be_bytes())
+        hash(self.backend.to_be_bytes())
     }
 
     fn __str__(&self) -> PyResult<String> {

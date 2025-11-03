@@ -12,13 +12,13 @@
 //!
 //! * `default-rng` - adds methods that use the system RNG (default).
 //! * `default-serialization` - adds methods for default binary serialization
-//!    that matches the serialization in the bindings.
-//!    MessagePack, `serde`-based.
+//!   that matches the serialization in the bindings.
+//!   MessagePack, `serde`-based.
 //! * `serde` - implements `serde`-based serialization and deserialization.
 //! * `bindings-python` - adds a `bindings_python` submodule allowing dependent crates
-//!        to use and re-export some of the Python-wrapped Umbral types.
+//!   to use and re-export some of the Python-wrapped Umbral types.
 //! * `bindings-wasm` - adds a `bindings_wasm` submodule allowing dependent crates
-//!        to use and re-export some of the WASM-wrapped Umbral types.
+//!   to use and re-export some of the WASM-wrapped Umbral types.
 //!
 //! # Usage
 //!
