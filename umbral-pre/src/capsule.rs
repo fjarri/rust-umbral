@@ -7,6 +7,7 @@ use core::fmt;
 
 use generic_array::GenericArray;
 use rand_core::{CryptoRng, RngCore};
+use secrecy::{ExposeSecret, SecretBox};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,6 @@ use crate::curve::{CompressedPointSize, CurvePoint, CurveScalar, NonZeroCurveSca
 use crate::hashing_ds::{hash_capsule_points, hash_to_polynomial_arg, hash_to_shared_secret};
 use crate::keys::{PublicKey, SecretKey};
 use crate::params::Parameters;
-use crate::secret_box::SecretBox;
 use crate::traits::fmt_public;
 
 #[cfg(feature = "default-serialization")]
@@ -158,33 +158,34 @@ impl Capsule {
     ) -> (Capsule, SecretBox<KeySeed>) {
         let g = CurvePoint::generator();
 
-        let priv_r = SecretBox::new(NonZeroCurveScalar::random(rng));
-        let pub_r = &g * priv_r.as_secret();
+        let priv_r = SecretBox::init_with(|| NonZeroCurveScalar::random(rng));
+        let pub_r = &g * priv_r.expose_secret();
 
-        let priv_u = SecretBox::new(NonZeroCurveScalar::random(rng));
-        let pub_u = &g * priv_u.as_secret();
+        let priv_u = SecretBox::init_with(|| NonZeroCurveScalar::random(rng));
+        let pub_u = &g * priv_u.expose_secret();
 
         let h = hash_capsule_points(&pub_r, &pub_u);
 
-        let s = priv_u.as_secret() + &(priv_r.as_secret() * &h);
+        let s = priv_u.expose_secret() + &(priv_r.expose_secret() * &h);
 
-        let shared_key =
-            SecretBox::new(&delegating_pk.to_point() * &(priv_r.as_secret() + priv_u.as_secret()));
+        let shared_key = SecretBox::init_with(|| {
+            &delegating_pk.to_point() * &(priv_r.expose_secret() + priv_u.expose_secret())
+        });
 
         let capsule = Self::new(pub_r, pub_u, s);
 
         (
             capsule,
-            SecretBox::new(shared_key.as_secret().to_compressed_array()),
+            SecretBox::init_with(|| shared_key.expose_secret().to_compressed_array()),
         )
     }
 
     /// Derive the same symmetric key
     pub(crate) fn open_original(&self, delegating_sk: &SecretKey) -> SecretBox<KeySeed> {
-        let shared_key = SecretBox::new(
-            &(&self.point_e + &self.point_v) * delegating_sk.to_secret_scalar().as_secret(),
-        );
-        SecretBox::new(shared_key.as_secret().to_compressed_array())
+        let shared_key = SecretBox::init_with(|| {
+            &(&self.point_e + &self.point_v) * delegating_sk.to_secret_scalar().expose_secret()
+        });
+        SecretBox::init_with(|| shared_key.expose_secret().to_compressed_array())
     }
 
     #[allow(clippy::many_single_char_names)]
@@ -205,7 +206,7 @@ impl Capsule {
         }
 
         let pub_key = receiving_sk.public_key().to_point();
-        let dh_point = &precursor * receiving_sk.to_secret_scalar().as_secret();
+        let dh_point = &precursor * receiving_sk.to_secret_scalar().expose_secret();
 
         // Combination of CFrags via Shamir's Secret Sharing reconstruction
         let mut lc = Vec::<NonZeroCurveScalar>::with_capacity(cfrags.len());
@@ -239,8 +240,10 @@ impl Capsule {
             return Err(OpenReencryptedError::ValidationFailed);
         }
 
-        let shared_key = SecretBox::new(&(&e_prime + &v_prime) * &d);
-        Ok(SecretBox::new(shared_key.as_secret().to_compressed_array()))
+        let shared_key = SecretBox::init_with(|| &(&e_prime + &v_prime) * &d);
+        Ok(SecretBox::init_with(|| {
+            shared_key.expose_secret().to_compressed_array()
+        }))
     }
 }
 
@@ -262,6 +265,7 @@ mod tests {
     use alloc::vec::Vec;
 
     use rand_core::OsRng;
+    use secrecy::ExposeSecret;
 
     use super::{Capsule, OpenReencryptedError};
 
@@ -297,12 +301,12 @@ mod tests {
         let key_seed_reenc = capsule
             .open_reencrypted(&receiving_sk, &delegating_pk, &cfrags)
             .unwrap();
-        assert_eq!(key_seed.as_secret(), key_seed_reenc.as_secret());
+        assert_eq!(key_seed.expose_secret(), key_seed_reenc.expose_secret());
 
         // Empty cfrag vector
         let result = capsule.open_reencrypted(&receiving_sk, &delegating_pk, &[]);
         assert_eq!(
-            result.map(|x| *x.as_secret()),
+            result.map(|x| *x.expose_secret()),
             Err(OpenReencryptedError::NoCapsuleFrags)
         );
 
@@ -321,7 +325,7 @@ mod tests {
 
         let result = capsule.open_reencrypted(&receiving_sk, &delegating_pk, &mismatched_cfrags);
         assert_eq!(
-            result.map(|x| *x.as_secret()),
+            result.map(|x| *x.expose_secret()),
             Err(OpenReencryptedError::MismatchedCapsuleFrags)
         );
 
@@ -329,7 +333,7 @@ mod tests {
         let (capsule2, _key_seed) = Capsule::from_public_key(&mut OsRng, &delegating_pk);
         let result = capsule2.open_reencrypted(&receiving_sk, &delegating_pk, &cfrags);
         assert_eq!(
-            result.map(|x| *x.as_secret()),
+            result.map(|x| *x.expose_secret()),
             Err(OpenReencryptedError::ValidationFailed)
         );
     }

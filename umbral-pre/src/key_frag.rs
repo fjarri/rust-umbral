@@ -4,6 +4,7 @@ use core::fmt;
 
 use generic_array::{typenum::U32, GenericArray};
 use rand_core::{CryptoRng, RngCore};
+use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -15,7 +16,6 @@ use crate::curve::{CurvePoint, CurveScalar, NonZeroCurveScalar};
 use crate::hashing_ds::{hash_to_polynomial_arg, hash_to_shared_secret, kfrag_signature_message};
 use crate::keys::{PublicKey, SecretKey, Signature, Signer};
 use crate::params::Parameters;
-use crate::secret_box::SecretBox;
 use crate::traits::fmt_public;
 
 #[cfg(feature = "default-serialization")]
@@ -334,22 +334,23 @@ impl<'a> KeyFragBase<'a> {
 
         // The precursor point is used as an ephemeral public key in a DH key exchange,
         // and the resulting shared secret 'dh_point' is used to derive other secret values
-        let private_precursor = SecretBox::new(NonZeroCurveScalar::random(rng));
-        let precursor = &g * private_precursor.as_secret();
+        let private_precursor = SecretBox::init_with(|| NonZeroCurveScalar::random(rng));
+        let precursor = &g * private_precursor.expose_secret();
 
-        let dh_point = &receiving_pk_point * private_precursor.as_secret();
+        let dh_point = &receiving_pk_point * private_precursor.expose_secret();
 
         // Secret value 'd' allows to make Umbral non-interactive
         let d = hash_to_shared_secret(&precursor, &receiving_pk_point, &dh_point);
 
         // Coefficients of the generating polynomial
-        let coefficient0 =
-            SecretBox::new(delegating_sk.to_secret_scalar().as_secret() * &(d.invert()));
+        let coefficient0 = SecretBox::init_with(|| {
+            delegating_sk.to_secret_scalar().expose_secret() * &(d.invert())
+        });
 
         let mut coefficients = Vec::<SecretBox<NonZeroCurveScalar>>::with_capacity(threshold);
         coefficients.push(coefficient0);
         for _i in 1..threshold {
-            coefficients.push(SecretBox::new(NonZeroCurveScalar::random(rng)));
+            coefficients.push(SecretBox::init_with(|| NonZeroCurveScalar::random(rng)));
         }
 
         Self {
@@ -367,14 +368,14 @@ impl<'a> KeyFragBase<'a> {
 // Coefficients of the generating polynomial
 fn poly_eval(coeffs: &[SecretBox<NonZeroCurveScalar>], x: &NonZeroCurveScalar) -> CurveScalar {
     let mut result: SecretBox<CurveScalar> =
-        SecretBox::new(coeffs[coeffs.len() - 1].as_secret().into());
+        SecretBox::init_with(|| coeffs[coeffs.len() - 1].expose_secret().into());
     for i in (0..coeffs.len() - 1).rev() {
         // Keeping the intermediate results zeroized as well
-        let temp = SecretBox::new(result.as_secret() * x);
-        *result.as_mut_secret() = temp.as_secret() + coeffs[i].as_secret();
+        let temp = SecretBox::init_with(|| result.expose_secret() * x);
+        *result.expose_secret_mut() = temp.expose_secret() + coeffs[i].expose_secret();
     }
     // This is not a secret anymore
-    *result.as_secret()
+    *result.expose_secret()
 }
 
 #[cfg(test)]

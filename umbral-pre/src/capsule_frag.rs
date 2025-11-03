@@ -2,6 +2,7 @@ use alloc::boxed::Box;
 use core::fmt;
 
 use rand_core::{CryptoRng, RngCore};
+use secrecy::{ExposeSecret, SecretBox};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,6 @@ use crate::curve::{CurvePoint, CurveScalar, NonZeroCurveScalar};
 use crate::hashing_ds::{hash_to_cfrag_verification, kfrag_signature_message};
 use crate::key_frag::{KeyFrag, KeyFragID};
 use crate::keys::{PublicKey, Signature};
-use crate::secret_box::SecretBox;
 use crate::traits::fmt_public;
 
 #[cfg(feature = "default-serialization")]
@@ -40,7 +40,7 @@ impl CapsuleFragProof {
         let params = capsule.params;
 
         let rk = kfrag.key;
-        let t = SecretBox::new(NonZeroCurveScalar::random(rng));
+        let t = SecretBox::init_with(|| NonZeroCurveScalar::random(rng));
 
         // Here are the formulaic constituents shared with `CapsuleFrag::verify()`.
 
@@ -53,15 +53,15 @@ impl CapsuleFragProof {
         let u = params.u;
         let u1 = kfrag.proof.commitment;
 
-        let e2 = &e * t.as_secret();
-        let v2 = &v * t.as_secret();
-        let u2 = &u * t.as_secret();
+        let e2 = &e * t.expose_secret();
+        let v2 = &v * t.expose_secret();
+        let u2 = &u * t.expose_secret();
 
         let h = hash_to_cfrag_verification(&e, e1, &e2, &v, v1, &v2, &u, &u1, &u2);
 
         ////////
 
-        let z3 = &(&rk * &h) + t.as_secret();
+        let z3 = &(&rk * &h) + t.expose_secret();
 
         Self {
             point_e2: e2,

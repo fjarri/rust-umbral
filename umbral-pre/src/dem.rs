@@ -8,10 +8,9 @@ use chacha20poly1305::{
 use generic_array::{typenum::Unsigned, ArrayLength, GenericArray};
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, RngCore};
+use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox};
 use sha2::Sha256;
 use zeroize::ZeroizeOnDrop;
-
-use crate::secret_box::SecretBox;
 
 /// Errors that can happen during symmetric encryption.
 #[derive(Debug, PartialEq, Eq)]
@@ -62,12 +61,12 @@ pub(crate) fn kdf<S: ArrayLength<u8>>(
 ) -> SecretBox<GenericArray<u8, S>> {
     let hk = Hkdf::<Sha256>::new(salt, seed);
 
-    let mut okm = SecretBox::new(GenericArray::<u8, S>::default());
+    let mut okm = SecretBox::init_with(GenericArray::<u8, S>::default);
 
     let def_info = info.unwrap_or(&[]);
 
     // We can only get an error here if `S` is too large, and it's known at compile-time.
-    hk.expand(def_info, okm.as_mut_secret()).unwrap();
+    hk.expand(def_info, okm.expose_secret_mut()).unwrap();
 
     okm
 }
@@ -86,8 +85,8 @@ impl DEM {
         let key_bytes = kdf::<KeySize>(key_seed, None, None);
         // Note that unlike `XChaCha20Poly1305`, `Key` is *not* zeroized automatically,
         // so we are wrapping it into a secret box.
-        let key = SecretBox::new(*Key::from_slice(key_bytes.as_secret()));
-        let cipher = XChaCha20Poly1305::new(key.as_secret());
+        let key = SecretBox::init_with(|| *Key::from_slice(key_bytes.expose_secret()));
+        let cipher = XChaCha20Poly1305::new(key.expose_secret());
         Self { cipher }
     }
 
@@ -145,22 +144,22 @@ impl DEM {
 mod tests {
 
     use generic_array::typenum::U32;
+    use secrecy::{ExposeSecret, SecretBox};
 
     use super::kdf;
     use crate::curve::CurvePoint;
-    use crate::secret_box::SecretBox;
 
     #[test]
     fn test_kdf() {
         let p1 = CurvePoint::generator();
         let salt = b"abcdefg";
         let info = b"sdasdasd";
-        let seed = SecretBox::new(p1.to_compressed_array());
-        let key = kdf::<U32>(seed.as_secret(), Some(&salt[..]), Some(&info[..]));
-        let key_same = kdf::<U32>(seed.as_secret(), Some(&salt[..]), Some(&info[..]));
-        assert_eq!(key.as_secret(), key_same.as_secret());
+        let seed = SecretBox::init_with(|| p1.to_compressed_array());
+        let key = kdf::<U32>(seed.expose_secret(), Some(&salt[..]), Some(&info[..]));
+        let key_same = kdf::<U32>(seed.expose_secret(), Some(&salt[..]), Some(&info[..]));
+        assert_eq!(key.expose_secret(), key_same.expose_secret());
 
-        let key_diff = kdf::<U32>(seed.as_secret(), None, Some(&info[..]));
-        assert_ne!(key.as_secret(), key_diff.as_secret());
+        let key_diff = kdf::<U32>(seed.expose_secret(), None, Some(&info[..]));
+        assert_ne!(key.expose_secret(), key_diff.expose_secret());
     }
 }

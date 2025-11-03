@@ -137,7 +137,6 @@ mod key_frag;
 mod keys;
 mod params;
 mod pre;
-mod secret_box;
 mod traits;
 
 #[cfg(all(test, feature = "serde"))]
@@ -156,7 +155,6 @@ pub use pre::{
     decrypt_original, decrypt_reencrypted, encrypt_with_rng, generate_kfrags_with_rng,
     reencrypt_with_rng, ReencryptionError,
 };
-pub use secret_box::SecretBox;
 
 #[cfg(feature = "default-rng")]
 pub use pre::{encrypt, generate_kfrags, reencrypt};

@@ -1,4 +1,5 @@
 use generic_array::GenericArray;
+use secrecy::{ExposeSecret, SecretBox};
 use sha2::{
     digest::{Digest, OutputSizeUser, Update},
     Sha256,
@@ -6,7 +7,6 @@ use sha2::{
 use zeroize::Zeroize;
 
 use crate::curve::{CurvePoint, NonZeroCurveScalar};
-use crate::secret_box::SecretBox;
 
 // Our hash of choice.
 pub(crate) type BackendDigest = Sha256;
@@ -35,7 +35,7 @@ impl Hash {
         bytes: &SecretBox<T>,
     ) -> Self {
         // Assuming here that the bytes are not saved in `BackendDigest`.
-        Self(self.0.chain(bytes.as_secret()))
+        Self(self.0.chain(bytes.expose_secret()))
     }
 
     pub fn digest(self) -> BackendDigest {

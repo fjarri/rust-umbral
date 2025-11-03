@@ -17,6 +17,7 @@ use pyo3::prelude::*;
 use pyo3::pyclass::PyClass;
 use pyo3::types::PyBytes;
 use pyo3::wrap_pyfunction;
+use secrecy::ExposeSecret;
 use sha2::{digest::Update, Digest, Sha256};
 
 use crate as umbral_pre;
@@ -92,7 +93,7 @@ impl SecretKey {
 
     pub fn to_be_bytes(&self) -> Py<PyAny> {
         let serialized = self.backend.to_be_bytes();
-        Python::attach(|py| PyBytes::new(py, serialized.as_secret()).into())
+        Python::attach(|py| PyBytes::new(py, serialized.expose_secret()).into())
     }
 
     #[staticmethod]
@@ -140,7 +141,7 @@ impl SecretKeyFactory {
 
     pub fn make_secret(&self, label: &[u8]) -> Py<PyAny> {
         let secret = self.backend.make_secret(label);
-        let bytes: &[u8] = secret.as_secret().as_ref();
+        let bytes: &[u8] = secret.expose_secret().as_ref();
         Python::attach(|py| PyBytes::new(py, bytes).into())
     }
 

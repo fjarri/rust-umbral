@@ -16,8 +16,8 @@ use k256::{
     elliptic_curve::{FieldBytes, PublicKey as BackendPublicKey, SecretKey as BackendSecretKey},
 };
 use rand_core::{CryptoRng, RngCore};
+use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox};
 use sha2::digest::{Digest, FixedOutput};
-use zeroize::ZeroizeOnDrop;
 
 #[cfg(feature = "default-rng")]
 use rand_core::OsRng;
@@ -28,7 +28,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::curve::{CompressedPointSize, CurvePoint, CurveType, NonZeroCurveScalar, ScalarSize};
 use crate::dem::kdf;
 use crate::hashing::{BackendDigest, Hash, ScalarDigest};
-use crate::secret_box::SecretBox;
 use crate::traits::{fmt_public, fmt_secret, SizeMismatchError};
 
 #[cfg(feature = "serde")]
@@ -216,7 +215,7 @@ impl fmt::Display for RecoverableSignature {
 }
 
 /// A secret key.
-#[derive(Clone, ZeroizeOnDrop, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SecretKey(BackendSecretKey<CurveType>);
 
 impl SecretKey {
@@ -241,30 +240,30 @@ impl SecretKey {
     }
 
     fn from_nonzero_scalar(scalar: SecretBox<NonZeroCurveScalar>) -> Self {
-        let backend_scalar_ref = scalar.as_secret().as_backend_scalar();
+        let backend_scalar_ref = scalar.expose_secret().as_backend_scalar();
         Self::new(BackendSecretKey::<CurveType>::from(backend_scalar_ref))
     }
 
     /// Returns a reference to the underlying scalar of the secret key.
     pub(crate) fn to_secret_scalar(&self) -> SecretBox<NonZeroCurveScalar> {
-        let backend_scalar = SecretBox::new(self.0.to_nonzero_scalar());
-        SecretBox::new(NonZeroCurveScalar::from_backend_scalar(
-            *backend_scalar.as_secret(),
-        ))
+        let backend_scalar = SecretBox::init_with(|| self.0.to_nonzero_scalar());
+        SecretBox::init_with(|| {
+            NonZeroCurveScalar::from_backend_scalar(*backend_scalar.expose_secret())
+        })
     }
 
     /// Serializes the secret key as a scalar in the big-endian representation.
     pub fn to_be_bytes(&self) -> SecretBox<GenericArray<u8, ScalarSize>> {
-        SecretBox::new(self.0.to_bytes())
+        SecretBox::init_with(|| self.0.to_bytes())
     }
 
     /// Deserializes the secret key from a scalar in the big-endian representation.
     pub fn try_from_be_bytes(bytes: &[u8]) -> Result<Self, String> {
-        let arr = SecretBox::new(
+        let arr = SecretBox::try_init_with(|| {
             GenericArray::<u8, ScalarSize>::from_exact_iter(bytes.iter().cloned())
-                .ok_or("Invalid length of a curve scalar")?,
-        );
-        BackendSecretKey::<CurveType>::from_bytes(arr.as_secret())
+                .ok_or("Invalid length of a curve scalar")
+        })?;
+        BackendSecretKey::<CurveType>::from_bytes(arr.expose_secret())
             .map(Self::new)
             .map_err(|err| format!("{err}"))
     }
@@ -282,7 +281,7 @@ pub(crate) fn digest_for_signing(message: &[u8]) -> BackendDigest {
 
 /// An object used to sign messages.
 /// For security reasons cannot be serialized.
-#[derive(Clone, ZeroizeOnDrop)]
+#[derive(Clone)]
 pub struct Signer(SigningKey);
 
 impl Signer {
@@ -414,14 +413,13 @@ type SecretKeyFactorySeed = GenericArray<u8, SecretKeyFactorySeedSize>;
 
 /// This class handles keyring material for Umbral, by allowing deterministic
 /// derivation of `SecretKey` objects based on labels.
-#[derive(Clone, ZeroizeOnDrop, PartialEq)]
 pub struct SecretKeyFactory(SecretBox<SecretKeyFactorySeed>);
 
 impl SecretKeyFactory {
     /// Creates a secret key factory using the given RNG.
     pub fn random_with_rng(rng: &mut (impl CryptoRng + RngCore)) -> Self {
-        let mut bytes = SecretBox::new(SecretKeyFactorySeed::default());
-        rng.fill_bytes(bytes.as_mut_secret());
+        let mut bytes = SecretBox::init_with(SecretKeyFactorySeed::default);
+        rng.fill_bytes(bytes.expose_secret_mut());
         Self(bytes)
     }
 
@@ -448,9 +446,9 @@ impl SecretKeyFactory {
             Ordering::Greater | Ordering::Less => {
                 Err(SizeMismatchError::new(received_size, expected_size))
             }
-            Ordering::Equal => Ok(Self(SecretBox::new(*SecretKeyFactorySeed::from_slice(
-                seed,
-            )))),
+            Ordering::Equal => Ok(Self(SecretBox::init_with(|| {
+                *SecretKeyFactorySeed::from_slice(seed)
+            }))),
         }
     }
 
@@ -462,19 +460,19 @@ impl SecretKeyFactory {
     ) -> SecretBox<GenericArray<u8, SecretKeyFactoryDerivedSize>> {
         let prefix = b"SECRET_DERIVATION/";
         let info = [prefix, label].concat();
-        kdf::<SecretKeyFactoryDerivedSize>(self.0.as_secret(), None, Some(&info))
+        kdf::<SecretKeyFactoryDerivedSize>(self.0.expose_secret(), None, Some(&info))
     }
 
     /// Creates a `SecretKey` deterministically from the given label.
     pub fn make_key(&self, label: &[u8]) -> SecretKey {
         let prefix = b"KEY_DERIVATION/";
         let info = [prefix, label].concat();
-        let key = kdf::<SecretKeyFactoryDerivedSize>(self.0.as_secret(), None, Some(&info));
-        let nz_scalar = SecretBox::new(
+        let key = kdf::<SecretKeyFactoryDerivedSize>(self.0.expose_secret(), None, Some(&info));
+        let nz_scalar = SecretBox::init_with(|| {
             ScalarDigest::new_with_dst(&info)
                 .chain_secret_bytes(&key)
-                .finalize(),
-        );
+                .finalize()
+        });
         SecretKey::from_nonzero_scalar(nz_scalar)
     }
 
@@ -482,7 +480,8 @@ impl SecretKeyFactory {
     pub fn make_factory(&self, label: &[u8]) -> Self {
         let prefix = b"FACTORY_DERIVATION/";
         let info = [prefix, label].concat();
-        let derived_seed = kdf::<SecretKeyFactorySeedSize>(self.0.as_secret(), None, Some(&info));
+        let derived_seed =
+            kdf::<SecretKeyFactorySeedSize>(self.0.expose_secret(), None, Some(&info));
         Self(derived_seed)
     }
 }

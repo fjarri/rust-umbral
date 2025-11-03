@@ -3,11 +3,11 @@
 //! Should not be used by regular users.
 
 use rand_core::OsRng;
+use secrecy::SecretBox;
 
 use crate::capsule::{Capsule, KeySeed, OpenReencryptedError};
 use crate::capsule_frag::CapsuleFrag;
 use crate::keys::{PublicKey, SecretKey};
-use crate::secret_box::SecretBox;
 
 /// Exported `Capsule::from_public_key()` for benchmark purposes.
 pub fn capsule_from_public_key(delegating_pk: &PublicKey) -> (Capsule, SecretBox<KeySeed>) {

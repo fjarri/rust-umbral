@@ -15,6 +15,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use js_sys::{Error, Uint8Array};
+use secrecy::ExposeSecret;
 use wasm_bindgen::prelude::{wasm_bindgen, JsValue};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_derive::TryFromJsValue;
@@ -97,7 +98,7 @@ impl SecretKey {
     #[wasm_bindgen(js_name = toBEBytes)]
     pub fn to_be_bytes(&self) -> Box<[u8]> {
         let serialized = self.0.to_be_bytes();
-        let bytes: &[u8] = serialized.as_secret().as_ref();
+        let bytes: &[u8] = serialized.expose_secret().as_ref();
         bytes.into()
     }
 
@@ -150,7 +151,7 @@ impl SecretKeyFactory {
     #[wasm_bindgen(js_name = makeSecret)]
     pub fn make_secret(&self, label: &[u8]) -> Vec<u8> {
         let secret = self.0.make_secret(label);
-        let bytes: &[u8] = secret.as_secret().as_ref();
+        let bytes: &[u8] = secret.expose_secret().as_ref();
         bytes.into()
     }
 
