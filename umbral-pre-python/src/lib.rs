@@ -4,7 +4,7 @@ use umbral_pre::bindings_python::*;
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn _umbral(py: Python, m: &PyModule) -> PyResult<()> {
+fn _umbral(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SecretKey>()?;
     m.add_class::<SecretKeyFactory>()?;
     m.add_class::<PublicKey>()?;

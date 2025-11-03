@@ -26,13 +26,13 @@ fn map_py_value_err<T: fmt::Display>(err: T) -> PyErr {
     PyValueError::new_err(format!("{err}"))
 }
 
-fn to_bytes<T, U>(obj: &T) -> PyResult<PyObject>
+fn to_bytes<T, U>(obj: &T) -> PyResult<Py<PyAny>>
 where
     T: AsRef<U>,
     U: DefaultSerialize,
 {
     let serialized = obj.as_ref().to_bytes().map_err(map_py_value_err)?;
-    Python::with_gil(|py| -> PyResult<PyObject> { Ok(PyBytes::new(py, &serialized).into()) })
+    Python::attach(|py| -> PyResult<Py<PyAny>> { Ok(PyBytes::new(py, &serialized).into()) })
 }
 
 fn from_bytes<'de, T, U>(data: &'de [u8]) -> PyResult<T>
@@ -90,9 +90,9 @@ impl SecretKey {
         }
     }
 
-    pub fn to_be_bytes(&self) -> PyObject {
+    pub fn to_be_bytes(&self) -> Py<PyAny> {
         let serialized = self.backend.to_be_bytes();
-        Python::with_gil(|py| PyBytes::new(py, serialized.as_secret()).into())
+        Python::attach(|py| PyBytes::new(py, serialized.as_secret()).into())
     }
 
     #[staticmethod]
@@ -138,10 +138,10 @@ impl SecretKeyFactory {
             .map_err(map_py_value_err)
     }
 
-    pub fn make_secret(&self, label: &[u8]) -> PyObject {
+    pub fn make_secret(&self, label: &[u8]) -> Py<PyAny> {
         let secret = self.backend.make_secret(label);
         let bytes: &[u8] = secret.as_secret().as_ref();
-        Python::with_gil(|py| PyBytes::new(py, bytes).into())
+        Python::attach(|py| PyBytes::new(py, bytes).into())
     }
 
     pub fn make_key(&self, label: &[u8]) -> SecretKey {
@@ -179,9 +179,9 @@ impl PublicKey {
             .map(Self::from)
     }
 
-    fn to_compressed_bytes(&self) -> PyObject {
+    fn to_compressed_bytes(&self) -> Py<PyAny> {
         let serialized = self.backend.to_compressed_bytes();
-        Python::with_gil(|py| PyBytes::new(py, &serialized).into())
+        Python::attach(|py| PyBytes::new(py, &serialized).into())
     }
 
     fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
@@ -238,9 +238,9 @@ impl Signature {
             .map(Self::from)
     }
 
-    fn to_der_bytes(&self) -> PyObject {
+    fn to_der_bytes(&self) -> Py<PyAny> {
         let serialized = self.backend.to_der_bytes();
-        Python::with_gil(|py| PyBytes::new(py, &serialized).into())
+        Python::attach(|py| PyBytes::new(py, &serialized).into())
     }
 
     #[staticmethod]
@@ -250,9 +250,9 @@ impl Signature {
             .map(Self::from)
     }
 
-    fn to_be_bytes(&self) -> PyObject {
+    fn to_be_bytes(&self) -> Py<PyAny> {
         let serialized = self.backend.to_be_bytes();
-        Python::with_gil(|py| PyBytes::new(py, &serialized).into())
+        Python::attach(|py| PyBytes::new(py, &serialized).into())
     }
 
     fn verify(&self, verifying_pk: &PublicKey, message: &[u8]) -> bool {
@@ -287,9 +287,9 @@ impl RecoverableSignature {
             .map(Self::from)
     }
 
-    fn to_be_bytes(&self) -> PyObject {
+    fn to_be_bytes(&self) -> Py<PyAny> {
         let serialized = self.backend.to_be_bytes();
-        Python::with_gil(|py| PyBytes::new(py, &serialized).into())
+        Python::attach(|py| PyBytes::new(py, &serialized).into())
     }
 
     fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
@@ -318,13 +318,13 @@ impl Capsule {
         from_bytes::<_, umbral_pre::Capsule>(data)
     }
 
-    fn __bytes__(&self) -> PyResult<PyObject> {
+    fn __bytes__(&self) -> PyResult<Py<PyAny>> {
         to_bytes(self)
     }
 
-    fn to_bytes_simple(&self) -> PyObject {
+    fn to_bytes_simple(&self) -> Py<PyAny> {
         let serialized = self.backend.to_bytes_simple();
-        Python::with_gil(|py| PyBytes::new(py, &serialized).into())
+        Python::attach(|py| PyBytes::new(py, &serialized).into())
     }
 
     fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
@@ -345,7 +345,7 @@ pub fn encrypt(
     py: Python<'_>,
     delegating_pk: &PublicKey,
     plaintext: &[u8],
-) -> PyResult<(Capsule, PyObject)> {
+) -> PyResult<(Capsule, Py<PyAny>)> {
     umbral_pre::encrypt(&delegating_pk.backend, plaintext)
         .map(|(backend_capsule, ciphertext)| {
             (backend_capsule.into(), PyBytes::new(py, &ciphertext).into())
@@ -359,7 +359,7 @@ pub fn decrypt_original(
     delegating_sk: &SecretKey,
     capsule: &Capsule,
     ciphertext: &[u8],
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     umbral_pre::decrypt_original(&delegating_sk.backend, &capsule.backend, ciphertext)
         .map(|plaintext| PyBytes::new(py, &plaintext).into())
         .map_err(map_py_value_err)
@@ -403,7 +403,7 @@ impl KeyFrag {
         from_bytes::<_, umbral_pre::KeyFrag>(data)
     }
 
-    fn __bytes__(&self) -> PyResult<PyObject> {
+    fn __bytes__(&self) -> PyResult<Py<PyAny>> {
         to_bytes(self)
     }
 
@@ -434,7 +434,7 @@ impl VerifiedKeyFrag {
         }
     }
 
-    fn __bytes__(&self) -> PyResult<PyObject> {
+    fn __bytes__(&self) -> PyResult<Py<PyAny>> {
         to_bytes(self)
     }
 
@@ -517,13 +517,13 @@ impl CapsuleFrag {
         from_bytes::<_, umbral_pre::CapsuleFrag>(data)
     }
 
-    fn __bytes__(&self) -> PyResult<PyObject> {
+    fn __bytes__(&self) -> PyResult<Py<PyAny>> {
         to_bytes(self)
     }
 
-    fn to_bytes_simple(&self) -> PyObject {
+    fn to_bytes_simple(&self) -> Py<PyAny> {
         let serialized = self.backend.to_bytes_simple();
-        Python::with_gil(|py| PyBytes::new(py, &serialized).into())
+        Python::attach(|py| PyBytes::new(py, &serialized).into())
     }
 
     fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
@@ -565,13 +565,13 @@ impl VerifiedCapsuleFrag {
         }
     }
 
-    fn __bytes__(&self) -> PyResult<PyObject> {
+    fn __bytes__(&self) -> PyResult<Py<PyAny>> {
         to_bytes(self)
     }
 
-    fn to_bytes_simple(&self) -> PyObject {
+    fn to_bytes_simple(&self) -> Py<PyAny> {
         let serialized = self.backend.to_bytes_simple();
-        Python::with_gil(|py| PyBytes::new(py, &serialized).into())
+        Python::attach(|py| PyBytes::new(py, &serialized).into())
     }
 }
 
@@ -589,7 +589,7 @@ pub fn decrypt_reencrypted(
     capsule: &Capsule,
     verified_cfrags: Vec<VerifiedCapsuleFrag>,
     ciphertext: &[u8],
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let backend_cfrags = verified_cfrags
         .iter()
         .cloned()
@@ -611,23 +611,23 @@ pub fn decrypt_reencrypted(
 // needs `#[pyfunction]` in the same module, we need these trampolines
 // to build modules externally.
 
-pub fn register_encrypt(m: &PyModule) -> PyResult<()> {
+pub fn register_encrypt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(encrypt, m)?)
 }
 
-pub fn register_decrypt_original(m: &PyModule) -> PyResult<()> {
+pub fn register_decrypt_original(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(decrypt_original, m)?)
 }
 
-pub fn register_generate_kfrags(m: &PyModule) -> PyResult<()> {
+pub fn register_generate_kfrags(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_kfrags, m)?)
 }
 
-pub fn register_reencrypt(m: &PyModule) -> PyResult<()> {
+pub fn register_reencrypt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(reencrypt, m)?)
 }
 
-pub fn register_decrypt_reencrypted(m: &PyModule) -> PyResult<()> {
+pub fn register_decrypt_reencrypted(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(decrypt_reencrypted, m)?)
 }
 
@@ -665,9 +665,9 @@ pub struct CurvePoint {
 #[pymethods]
 impl CurvePoint {
     #[getter]
-    fn coordinates(&self) -> Option<(PyObject, PyObject)> {
+    fn coordinates(&self) -> Option<(Py<PyAny>, Py<PyAny>)> {
         let coords = self.backend.coordinates();
-        Python::with_gil(|py| -> Option<(PyObject, PyObject)> {
+        Python::attach(|py| -> Option<(Py<PyAny>, Py<PyAny>)> {
             coords.map(|(x, y)| {
                 (
                     PyBytes::new(py, x.as_ref()).into(),
@@ -710,7 +710,7 @@ impl ReencryptionEvidence {
         from_bytes::<_, umbral_pre::ReencryptionEvidence>(data)
     }
 
-    fn __bytes__(&self) -> PyResult<PyObject> {
+    fn __bytes__(&self) -> PyResult<Py<PyAny>> {
         to_bytes(self)
     }
 
@@ -774,8 +774,8 @@ impl ReencryptionEvidence {
     }
 
     #[getter]
-    fn kfrag_validity_message_hash(&self) -> PyObject {
-        Python::with_gil(|py| -> PyObject {
+    fn kfrag_validity_message_hash(&self) -> Py<PyAny> {
+        Python::attach(|py| -> Py<PyAny> {
             PyBytes::new(py, self.backend.kfrag_validity_message_hash.as_ref()).into()
         })
     }
