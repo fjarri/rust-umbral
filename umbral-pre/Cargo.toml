@@ -29,7 +29,7 @@ secrecy = { version = "0.10",  default-features = false }
 
 # These packages are among the dependencies of the packages above.
 # Their versions should be updated when the main packages above are updated.
-generic-array = { version = "0.14.6", features = ["zeroize"] }
+generic-array = { version = "=0.14.7", features = ["zeroize"] }
 rand_core = { version = "0.6", default-features = false }
 getrandom = { version = "0.2", optional = true, default-features = false }
 subtle = { version = "2.4", default-features = false }
