@@ -64,7 +64,7 @@ class PublicKey:
 @final
 class Signer:
 
-    def __init__(self, secret_key: SecretKey):
+    def __new__(cls, secret_key: SecretKey):
         ...
 
     def sign(self, message: bytes) -> Signature:
@@ -237,7 +237,7 @@ class CurvePoint:
 @final
 class Parameters:
 
-    def __init__(self) -> None:
+    def __new__(cls):
         ...
 
     u: CurvePoint
@@ -246,8 +246,8 @@ class Parameters:
 @final
 class ReencryptionEvidence:
 
-    def __init__(
-            self,
+    def __new__(
+            cls,
             capsule: Capsule,
             vcfrag: VerifiedCapsuleFrag,
             verifying_pk: PublicKey,

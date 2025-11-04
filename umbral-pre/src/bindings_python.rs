@@ -207,8 +207,8 @@ pub struct Signer {
 #[pymethods]
 impl Signer {
     #[new]
-    pub fn new(sk: &SecretKey) -> Self {
-        umbral_pre::Signer::new(sk.backend.clone()).into()
+    pub fn new(secret_key: &SecretKey) -> Self {
+        umbral_pre::Signer::new(secret_key.backend.clone()).into()
     }
 
     pub fn sign(&self, message: &[u8]) -> Signature {
