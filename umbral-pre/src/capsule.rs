@@ -270,6 +270,9 @@ mod tests {
     #[cfg(feature = "serde")]
     use crate::serde_bytes::tests::check_serialization_roundtrip;
 
+    #[cfg(feature = "serde")]
+    use ::{rand_chacha::ChaCha12Rng, rand_core::SeedableRng};
+
     #[test]
     fn test_open_reencrypted() {
         let delegating_sk = SecretKey::random();
@@ -334,10 +337,23 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_serialization() {
-        let delegating_sk = SecretKey::random();
+        let mut rng = ChaCha12Rng::seed_from_u64(12345);
+        let delegating_sk = SecretKey::random_with_rng(&mut rng);
         let delegating_pk = delegating_sk.public_key();
-        let (capsule, _key_seed) = Capsule::from_public_key(&mut OsRng, &delegating_pk);
+        let (capsule, _key_seed) = Capsule::from_public_key(&mut rng, &delegating_pk);
 
-        check_serialization_roundtrip(&capsule);
+        let expected_json = concat![
+            "{\"point_e\":\"0x0343f37dbe85f2f51faa27c5467618a045828e305a5011d7426f40c835d04244b5\",",
+            "\"point_v\":\"0x0254a1c5b154243c80fc6351c3286f457f104eaa75ea363572dc21dc95d9ab6a26\",",
+            "\"signature\":\"0xdadc13a4766c5cda2eed47556cb92d6f02bdef0192d9159f49fbb1e3ccaa7cb7\"}"
+        ];
+        let expected_rmp_hex = concat![
+            "93c4210343f37dbe85f2f51faa27c5467618a045828e305a5011d7426f40c835",
+            "d04244b5c4210254a1c5b154243c80fc6351c3286f457f104eaa75ea363572dc",
+            "21dc95d9ab6a26c420dadc13a4766c5cda2eed47556cb92d6f02bdef0192d915",
+            "9f49fbb1e3ccaa7cb7"
+        ];
+
+        check_serialization_roundtrip(&capsule, expected_json, expected_rmp_hex);
     }
 }

@@ -304,37 +304,55 @@ mod tests {
     use alloc::boxed::Box;
     use alloc::vec::Vec;
 
-    use super::VerifiedCapsuleFrag;
+    use rand_core::{CryptoRngCore, OsRng};
 
-    use crate::{encrypt, generate_kfrags, reencrypt, Capsule, PublicKey, SecretKey, Signer};
+    use super::VerifiedCapsuleFrag;
+    use crate::{
+        encrypt_with_rng, generate_kfrags_with_rng, reencrypt_with_rng, Capsule, PublicKey,
+        SecretKey, Signer,
+    };
 
     #[cfg(feature = "serde")]
     use crate::serde_bytes::tests::check_serialization_roundtrip;
 
-    fn prepare_cfrags() -> (
+    #[cfg(feature = "serde")]
+    use ::{rand_chacha::ChaCha12Rng, rand_core::SeedableRng};
+
+    fn prepare_cfrags(
+        rng: &mut impl CryptoRngCore,
+    ) -> (
         PublicKey,
         PublicKey,
         PublicKey,
         Capsule,
         Box<[VerifiedCapsuleFrag]>,
     ) {
-        let delegating_sk = SecretKey::random();
+        let delegating_sk = SecretKey::random_with_rng(rng);
         let delegating_pk = delegating_sk.public_key();
 
-        let signer = Signer::new(SecretKey::random());
+        let signer = Signer::new(SecretKey::random_with_rng(rng));
         let verifying_pk = signer.verifying_key();
 
-        let receiving_sk = SecretKey::random();
+        let receiving_sk = SecretKey::random_with_rng(rng);
         let receiving_pk = receiving_sk.public_key();
 
         let plaintext = b"peace at dawn";
-        let (capsule, _ciphertext) = encrypt(&delegating_pk, plaintext).unwrap();
+        let (capsule, _ciphertext) = encrypt_with_rng(rng, &delegating_pk, plaintext).unwrap();
 
-        let kfrags = generate_kfrags(&delegating_sk, &receiving_pk, &signer, 2, 3, true, true);
+        let kfrags = generate_kfrags_with_rng(
+            rng,
+            &delegating_sk,
+            &receiving_pk,
+            &signer,
+            2,
+            3,
+            true,
+            true,
+        );
 
         let verified_cfrags: Vec<_> = kfrags
             .iter()
-            .map(|kfrag| reencrypt(&capsule, kfrag.clone()))
+            .map(|kfrag| reencrypt_with_rng(rng, &capsule, kfrag.clone()))
             .collect();
 
         (
@@ -349,7 +367,7 @@ mod tests {
     #[test]
     fn test_verify() {
         let (delegating_pk, receiving_pk, verifying_pk, capsule, verified_cfrags) =
-            prepare_cfrags();
+            prepare_cfrags(&mut OsRng);
 
         for verified_cfrag in verified_cfrags.iter() {
             let cfrag = verified_cfrag.clone().unverify();
@@ -364,8 +382,10 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_serialization() {
+        let mut rng = ChaCha12Rng::seed_from_u64(12345);
+
         let (_delegating_pk, _receiving_pk, _verifying_pk, _capsule, verified_cfrags) =
-            prepare_cfrags();
+            prepare_cfrags(&mut rng);
 
         let cfrag = verified_cfrags[0].clone().unverify();
 
@@ -374,6 +394,34 @@ mod tests {
         let vcfrag_bytes = rmp_serde::to_vec(&verified_cfrags[0]).unwrap();
         assert_eq!(vcfrag_bytes, cfrag_bytes);
 
-        check_serialization_roundtrip(&cfrag);
+        let expected_json = concat![
+            "{\"point_e1\":\"0x0300f0e3704235018e1ee413e2c309b8ea539106dec3c871beb821c891eddb2da4\",",
+            "\"point_v1\":\"0x02cba2bdc29647a8997242e9f4ece8de071d9d63b42df456d48129ffc8dcfa5042\",",
+            "\"kfrag_id\":\"0xcb118de29ffd6aeaa84f6249ff7a9e2c89b77bf1ced81370fe377a1f1fd5d039\",",
+            "\"precursor\":\"0x02e66f6cc2b3caa64b51098faada4f73de2948416522ca301afa4e5682288fc106\",",
+            "\"proof\":{\"point_e2\":\"0x0364de0d2b868228b8cced8aa7a527d708b59669e3fa2b99963242e0daba718fe9\",",
+            "\"point_v2\":\"0x031d75e0c706202673bbe860f936b8cf8668996e94e7b27ddca95acb6bd7d70b34\",",
+            "\"kfrag_commitment\":\"0x036e8c78f6439c428bbfba49874cb8be3d7af7905de024447f8811bcbead032eb5\",",
+            "\"kfrag_pok\":\"0x02ae4ab8f1ee0eefe04d788d8e7b51ee92b72b384d0c914d80c67625303ce6e4e4\",",
+            "\"signature\":\"0x1347aff126ed0f80f8215baa8188e3774ef0f725283f4247fc5fc559a6fda0b0\",",
+            "\"kfrag_signature\":\"0x4bc49063be3c6f542b27a15874d8e2621357ffca69dea8ded236106e90fc4d87",
+            "3ce0cfdfea2f30412f9b50e88d87bd46773c1e7f55fe8cd1940462992e4c9f49\"}}"
+        ];
+        let expected_rmp_hex = concat![
+            "95c4210300f0e3704235018e1ee413e2c309b8ea539106dec3c871beb821c891",
+            "eddb2da4c42102cba2bdc29647a8997242e9f4ece8de071d9d63b42df456d481",
+            "29ffc8dcfa5042c420cb118de29ffd6aeaa84f6249ff7a9e2c89b77bf1ced813",
+            "70fe377a1f1fd5d039c42102e66f6cc2b3caa64b51098faada4f73de29484165",
+            "22ca301afa4e5682288fc10696c4210364de0d2b868228b8cced8aa7a527d708",
+            "b59669e3fa2b99963242e0daba718fe9c421031d75e0c706202673bbe860f936",
+            "b8cf8668996e94e7b27ddca95acb6bd7d70b34c421036e8c78f6439c428bbfba",
+            "49874cb8be3d7af7905de024447f8811bcbead032eb5c42102ae4ab8f1ee0eef",
+            "e04d788d8e7b51ee92b72b384d0c914d80c67625303ce6e4e4c4201347aff126",
+            "ed0f80f8215baa8188e3774ef0f725283f4247fc5fc559a6fda0b0c4404bc490",
+            "63be3c6f542b27a15874d8e2621357ffca69dea8ded236106e90fc4d873ce0cf",
+            "dfea2f30412f9b50e88d87bd46773c1e7f55fe8cd1940462992e4c9f49"
+        ];
+
+        check_serialization_roundtrip(&cfrag, expected_json, expected_rmp_hex);
     }
 }

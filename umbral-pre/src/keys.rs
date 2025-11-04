@@ -506,6 +506,8 @@ mod tests {
 
     #[cfg(feature = "serde")]
     use crate::serde_bytes::tests::check_serialization_roundtrip;
+    #[cfg(feature = "serde")]
+    use ::{rand_chacha::ChaCha12Rng, rand_core::SeedableRng};
 
     #[test]
     fn test_secret_key_factory() {
@@ -571,29 +573,59 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serialize_signature() {
-        let message = b"asdafdahsfdasdfasd";
-        let signer = Signer::new(SecretKey::random());
-        let signature = signer.sign(message);
+        let mut rng = ChaCha12Rng::seed_from_u64(12345);
 
-        check_serialization_roundtrip(&signature);
+        let message = b"asdafdahsfdasdfasd";
+        let signer = Signer::new(SecretKey::random_with_rng(&mut rng));
+        let signature = signer.sign_with_rng(&mut rng, message);
+
+        let expected_json = concat![
+            "\"0x6b111e01ce5654c7e6807454c648bc64d39da141d7d76f4d9f2270e02dc89a90",
+            "3ac9a5f7094ede31703c2499824b93d08d5bcca8027386c53b733df1aa224604\""
+        ];
+        let expected_rmp_hex = concat![
+            "c4406b111e01ce5654c7e6807454c648bc64d39da141d7d76f4d9f2270e02dc89a90",
+            "3ac9a5f7094ede31703c2499824b93d08d5bcca8027386c53b733df1aa224604"
+        ];
+
+        check_serialization_roundtrip(&signature, expected_json, expected_rmp_hex);
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn test_serialize_recoverable_signature() {
+        let mut rng = ChaCha12Rng::seed_from_u64(12345);
+
         let message = b"asdafdahsfdasdfasd";
-        let signer = Signer::new(SecretKey::random());
-        let signature = signer.sign(message);
+        let signer = Signer::new(SecretKey::random_with_rng(&mut rng));
+        let signature = signer.sign_with_rng(&mut rng, message);
         let rsig = RecoverableSignature::from_normalized(signature, true);
-        check_serialization_roundtrip(&rsig);
+
+        let expected_json = concat![
+            "\"0x6b111e01ce5654c7e6807454c648bc64d39da141d7d76f4d9f2270e02dc89a90",
+            "3ac9a5f7094ede31703c2499824b93d08d5bcca8027386c53b733df1aa22460401\""
+        ];
+        let expected_rmp_hex = concat![
+            "c4416b111e01ce5654c7e6807454c648bc64d39da141d7d76f4d9f2270e02dc89a90",
+            "3ac9a5f7094ede31703c2499824b93d08d5bcca8027386c53b733df1aa22460401"
+        ];
+
+        check_serialization_roundtrip(&rsig, expected_json, expected_rmp_hex);
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn test_serialize_public_key() {
-        let signer = Signer::new(SecretKey::random());
+        let mut rng = ChaCha12Rng::seed_from_u64(12345);
+
+        let signer = Signer::new(SecretKey::random_with_rng(&mut rng));
         let pk = signer.verifying_key();
 
-        check_serialization_roundtrip(&pk);
+        let expected_json =
+            "\"0x0246003fc57f66ab3634fb0409f91dacd14bf0200443b5bcc0d4a5673076354579\"";
+        let expected_rmp_hex =
+            "c4210246003fc57f66ab3634fb0409f91dacd14bf0200443b5bcc0d4a5673076354579";
+
+        check_serialization_roundtrip(&pk, expected_json, expected_rmp_hex);
     }
 }

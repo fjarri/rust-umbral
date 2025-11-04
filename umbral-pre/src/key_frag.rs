@@ -414,7 +414,7 @@ mod tests {
 
     use alloc::boxed::Box;
 
-    use rand_core::OsRng;
+    use rand_core::{CryptoRngCore, OsRng};
 
     use super::{KeyFragBase, KeyFragVerificationError, VerifiedKeyFrag};
 
@@ -423,24 +423,28 @@ mod tests {
     #[cfg(feature = "serde")]
     use crate::serde_bytes::tests::check_serialization_roundtrip;
 
+    #[cfg(feature = "serde")]
+    use ::{rand_chacha::ChaCha12Rng, rand_core::SeedableRng};
+
     fn prepare_kfrags(
+        rng: &mut impl CryptoRngCore,
         sign_delegating_key: bool,
         sign_receiving_key: bool,
     ) -> (PublicKey, PublicKey, PublicKey, Box<[VerifiedKeyFrag]>) {
-        let delegating_sk = SecretKey::random();
+        let delegating_sk = SecretKey::random_with_rng(rng);
         let delegating_pk = delegating_sk.public_key();
 
-        let signer = Signer::new(SecretKey::random());
+        let signer = Signer::new(SecretKey::random_with_rng(rng));
         let verifying_pk = signer.verifying_key();
 
-        let receiving_sk = SecretKey::random();
+        let receiving_sk = SecretKey::random_with_rng(rng);
         let receiving_pk = receiving_sk.public_key();
 
-        let base = KeyFragBase::new(&mut OsRng, &delegating_sk, &receiving_pk, &signer, 2);
+        let base = KeyFragBase::new(rng, &delegating_sk, &receiving_pk, &signer, 2);
         let vkfrags = [
-            VerifiedKeyFrag::from_base(&mut OsRng, &base, sign_delegating_key, sign_receiving_key),
-            VerifiedKeyFrag::from_base(&mut OsRng, &base, sign_delegating_key, sign_receiving_key),
-            VerifiedKeyFrag::from_base(&mut OsRng, &base, sign_delegating_key, sign_receiving_key),
+            VerifiedKeyFrag::from_base(rng, &base, sign_delegating_key, sign_receiving_key),
+            VerifiedKeyFrag::from_base(rng, &base, sign_delegating_key, sign_receiving_key),
+            VerifiedKeyFrag::from_base(rng, &base, sign_delegating_key, sign_receiving_key),
         ];
 
         (delegating_pk, receiving_pk, verifying_pk, Box::new(vkfrags))
@@ -451,7 +455,7 @@ mod tests {
         for sign_dk in [false, true].iter().copied() {
             for sign_rk in [false, true].iter().copied() {
                 let (delegating_pk, receiving_pk, verifying_pk, vkfrags) =
-                    prepare_kfrags(sign_dk, sign_rk);
+                    prepare_kfrags(&mut OsRng, sign_dk, sign_rk);
 
                 let kfrag = vkfrags[0].clone().unverify();
 
@@ -497,8 +501,10 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_serialization() {
+        let mut rng = ChaCha12Rng::seed_from_u64(12345);
+
         let (_delegating_pk, _receiving_pk, _verifying_pk, verified_kfrags) =
-            prepare_kfrags(true, true);
+            prepare_kfrags(&mut rng, true, true);
 
         let kfrag = verified_kfrags[0].clone().unverify();
 
@@ -507,6 +513,32 @@ mod tests {
         let vkfrag_bytes = rmp_serde::to_vec(&verified_kfrags[0]).unwrap();
         assert_eq!(vkfrag_bytes, kfrag_bytes);
 
-        check_serialization_roundtrip(&kfrag);
+        let expected_json = concat![
+            "{\"params\":{\"u\":\"0x03079390d0fbe220fc34aab8ecbf49098098036820fadb98c03143e55db8ec73cd\"},",
+            "\"id\":\"0x20c38b31f7ef25ff8724fdad8663ad53a385e5b2729fb196d13b3190f5cc8af9\",",
+            "\"key\":\"0xf739c142d42ecc5c8e23b13a00c60126e0e79f5376fa157e5fc13d79579fc6a1\",",
+            "\"precursor\":\"0x0369e9d6a5bedb9dca6ce33ee2e9984c5c3c592e85a6fa9f8ac634f38234474f42\",",
+            "\"proof\":{\"commitment\":\"0x03e23a121bd20da50c9ab7d24062004d7fb06d88259fbf768fd05e62f755442f28\",",
+            "\"signature_for_proxy\":\"0xbdd4c1cc66ef140cf002fefdc85dae21a2519062a1992ac29345732b2606ca81",
+            "439b40936bb0bd21f79aeac77ab1368e87f58b0e9f6c00a73b170b9867585754\",",
+            "\"signature_for_receiver\":\"0xb50de49e7738000cfeba816c0dd0aaca379abc291cac35d253666dc0c7db605c",
+            "5fa0e365abd1ae9b3819074c6695e51252f74d7dcb2345d70680e182465b470e\",",
+            "\"delegating_key_signed\":true,",
+            "\"receiving_key_signed\":true}}"
+        ];
+        let expected_rmp_hex = concat![
+            "9591c42103079390d0fbe220fc34aab8ecbf49098098036820fadb98c03143e5",
+            "5db8ec73cdc42020c38b31f7ef25ff8724fdad8663ad53a385e5b2729fb196d1",
+            "3b3190f5cc8af9c420f739c142d42ecc5c8e23b13a00c60126e0e79f5376fa15",
+            "7e5fc13d79579fc6a1c4210369e9d6a5bedb9dca6ce33ee2e9984c5c3c592e85",
+            "a6fa9f8ac634f38234474f4295c42103e23a121bd20da50c9ab7d24062004d7f",
+            "b06d88259fbf768fd05e62f755442f28c440bdd4c1cc66ef140cf002fefdc85d",
+            "ae21a2519062a1992ac29345732b2606ca81439b40936bb0bd21f79aeac77ab1",
+            "368e87f58b0e9f6c00a73b170b9867585754c440b50de49e7738000cfeba816c",
+            "0dd0aaca379abc291cac35d253666dc0c7db605c5fa0e365abd1ae9b3819074c",
+            "6695e51252f74d7dcb2345d70680e182465b470ec3c3"
+        ];
+
+        check_serialization_roundtrip(&kfrag, expected_json, expected_rmp_hex);
     }
 }
