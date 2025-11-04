@@ -8,6 +8,7 @@ description = "Implementation of Umbral proxy reencryption algorithm"
 repository = "https://github.com/nucypher/rust-umbral/tree/master/umbral-pre"
 readme = "README.md"
 categories = ["cryptography", "no-std"]
+rust-version = "1.81"
 
 [dependencies]
 k256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic", "hash2curve"] }

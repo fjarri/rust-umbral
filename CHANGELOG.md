@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `SecretKey::try_from_be_bytes()` takes just a slice reference instead of a `SecretBox`. ([#134])
 - Bumped MSRV to 1.70. ([#134])
+- Bumped MSRV to 1.81. ([#135])
 
 
 [#134]: https://github.com/nucypher/rust-umbral/pull/134
+[#135]: https://github.com/nucypher/rust-umbral/pull/135
 
 
 ## [0.11.0] - 2023-08-01
